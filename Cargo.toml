@@ -1,0 +1,13 @@
+[package]
+name = "notes2md"
+version = "0.1.0"
+edition = "2021"
+authors = ["Benjamin Sherman <benjamin@holyarmy.org"]
+repository = "https://github.com/bsherman/notes2md.git"
+homepage = "https://github.com/bsherman/notes2md.git"
+license = "MIT"
+readme = "README.md"
+description = "A simple program to convert notes from either Apple Notes or Simplenote to markdown which can be used with Notable or other editors."
+
+[dependencies]
+clap = { version = "3.0.13", features = ["derive"] }
