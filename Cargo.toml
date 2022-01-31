@@ -11,3 +11,4 @@ description = "A simple program to convert notes from either Apple Notes or Simp
 
 [dependencies]
 clap = { version = "3.0.13", features = ["derive"] }
+tempfile = { version = "3.3.0" }
