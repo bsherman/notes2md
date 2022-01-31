@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 /// A simple program to convert notes from either Apple Notes or Simplenote to markdown which can be used with Notable or other editors.
 #[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
+#[clap(version, about, long_about = None)]
 #[clap(global_setting(AppSettings::PropagateVersion))]
 #[clap(global_setting(AppSettings::UseLongFormatForHelpSubcommand))]
 struct Cli {

@@ -2,7 +2,7 @@
 name = "notes2md"
 version = "0.1.0"
 edition = "2021"
-authors = ["Benjamin Sherman <benjamin@holyarmy.org"]
+authors = ["Benjamin Sherman <benjamin-at-holyarmy-org>"]
 repository = "https://github.com/bsherman/notes2md.git"
 homepage = "https://github.com/bsherman/notes2md.git"
 license = "MIT"
