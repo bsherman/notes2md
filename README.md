@@ -7,7 +7,7 @@ A simple utility to convert Apple Notes (exported from iCloud) or Simplenotes (e
 This is mostly a toy project on which to practice [Rust](https://www.rust-lang.org/).
 
 ```bash
-notes2md -h
+$ ./notes2md -h
 notes2md 0.1.0
 A simple program to convert notes from either Apple Notes or Simplenote to markdown which can be
 used with Notable or other editors.
