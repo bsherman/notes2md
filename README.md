@@ -25,3 +25,14 @@ SUBCOMMANDS:
     help          Print this message or the help of the given subcommand(s)
     simplenote    process a JSON file export of Simplenote data <SOURCE_FILE>
 ```
+
+Currently this will parse arguments but not actually process the any data.
+```bash
+$ ./notes2md -d /tmp applenotes ./test_data/
+notes2md will read applenotes from source './test_data/' and write to '/tmp'
+Apple Notes conversion not yet implemented.
+
+$ ./notes2md -d /tmp simplenote ./test_data/not_a_dir.txt 
+notes2md will read simplenote from source './test_data/not_a_dir.txt' and write to '/tmp'
+Simplenote conversion not yet implemented.
+```
