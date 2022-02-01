@@ -125,7 +125,6 @@ fn verify_source(source_path: &PathBuf) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::ErrorKind;
 
     #[test]
     fn verify_dest_should_fail_when_not_found() {
