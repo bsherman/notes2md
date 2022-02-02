@@ -6,12 +6,18 @@ pub mod processor;
 use processor::applenotes;
 use processor::simplenote;
 
+#[derive(PartialEq)]
+enum SourceType {
+    File,
+    Directory,
+}
+
 pub fn process_applenotes(source_dir: PathBuf, dest_dir: PathBuf) -> Result<(), Error> {
     let dv = verify_dest(&dest_dir);
     if dv.is_err() {
         dv
     } else {
-        let sv = verify_source(&source_dir);
+        let sv = verify_source(&source_dir, SourceType::Directory);
         if sv.is_err() {
             sv
         } else {
@@ -25,7 +31,7 @@ pub fn process_simplenote(source_file: PathBuf, dest_dir: PathBuf) -> Result<(),
     if dv.is_err() {
         dv
     } else {
-        let sv = verify_source(&source_file);
+        let sv = verify_source(&source_file, SourceType::File);
         if sv.is_err() {
             sv
         } else {
@@ -66,7 +72,7 @@ fn verify_dest(dest_dir: &PathBuf) -> Result<(), Error> {
     }
 }
 
-fn verify_source(source_path: &PathBuf) -> Result<(), Error> {
+fn verify_source(source_path: &PathBuf, source_type: SourceType) -> Result<(), Error> {
     let attr = fs::metadata(&source_path);
     match attr {
         Err(e) => match e.kind() {
@@ -78,35 +84,55 @@ fn verify_source(source_path: &PathBuf) -> Result<(), Error> {
         },
         Ok(metadata) => {
             if metadata.is_dir() {
-                // read the directory to ensure it is permitted
-                match fs::read_dir(&source_path) {
-                    Err(e) => match e.kind() {
-                        ErrorKind::PermissionDenied => Err(Error::new(
-                            e.kind(),
-                            format!(
-                                "source_path: '{}' directory access denied",
-                                source_path.to_str().unwrap()
-                            ),
-                        )),
-                        _ => Err(e),
-                    },
-                    Ok(_) => Ok(()),
+                if SourceType::Directory == source_type {
+                    // read the directory to ensure it is permitted
+                    match fs::read_dir(&source_path) {
+                        Err(e) => match e.kind() {
+                            ErrorKind::PermissionDenied => Err(Error::new(
+                                e.kind(),
+                                format!(
+                                    "source_path: '{}' directory access denied",
+                                    source_path.to_str().unwrap()
+                                ),
+                            )),
+                            _ => Err(e),
+                        },
+                        Ok(_) => Ok(()),
+                    }
+                } else {
+                    Err(Error::new(
+                        ErrorKind::InvalidInput,
+                        format!(
+                            "source_path: '{}' is a directory but file was required",
+                            source_path.to_str().unwrap()
+                        ),
+                    ))
                 }
             } else if metadata.is_file() {
-                // open file to ensure it is permitted
-                let file = fs::File::open(&source_path);
-                match file {
-                    Err(e) => match e.kind() {
-                        ErrorKind::PermissionDenied => Err(Error::new(
-                            e.kind(),
-                            format!(
-                                "source_path: '{}' file access denied",
-                                source_path.to_str().unwrap()
-                            ),
-                        )),
-                        _ => Err(e),
-                    },
-                    Ok(_) => Ok(()),
+                if SourceType::File == source_type {
+                    // open file to ensure it is permitted
+                    let file = fs::File::open(&source_path);
+                    match file {
+                        Err(e) => match e.kind() {
+                            ErrorKind::PermissionDenied => Err(Error::new(
+                                e.kind(),
+                                format!(
+                                    "source_path: '{}' file access denied",
+                                    source_path.to_str().unwrap()
+                                ),
+                            )),
+                            _ => Err(e),
+                        },
+                        Ok(_) => Ok(()),
+                    }
+                } else {
+                    Err(Error::new(
+                        ErrorKind::InvalidInput,
+                        format!(
+                            "source_path: '{}' is a file but directory was required",
+                            source_path.to_str().unwrap()
+                        ),
+                    ))
                 }
             } else {
                 // return error
@@ -161,44 +187,83 @@ mod tests {
 
     #[test]
     fn verify_source_should_fail_when_source_does_not_exist() {
-        let non_existent_path = PathBuf::from("test_data/filename_which_does_not_exist");
-        let error = verify_source(&non_existent_path).unwrap_err();
+        let path = PathBuf::from("test_data/filename_which_does_not_exist");
+        let error = verify_source(&path, SourceType::File).unwrap_err();
         assert_eq!(ErrorKind::NotFound, error.kind());
         assert_eq!(
-            "source_path: 'test_data/filename_which_does_not_exist' not found",
+            format!(
+                "source_path: '{}' not found",
+                String::from(path.to_string_lossy())
+            ),
             format!("{}", error)
         );
     }
 
     #[test]
     fn verify_source_should_fail_when_source_is_not_file_or_dir() {
-        let restricted_path = PathBuf::from("test_data/tty-device");
-        let error = verify_source(&restricted_path).unwrap_err();
+        let path = PathBuf::from("test_data/tty-device");
+        let error = verify_source(&path, SourceType::File).unwrap_err();
         assert_eq!(ErrorKind::InvalidInput, error.kind());
         assert_eq!(
-            "source_path: 'test_data/tty-device' is not a file or directory",
+            format!(
+                "source_path: '{}' is not a file or directory",
+                String::from(path.to_string_lossy())
+            ),
             format!("{}", error)
         );
     }
 
     #[test]
     fn verify_source_should_fail_when_source_is_denied_dir() {
-        let restricted_path = PathBuf::from("test_data/dir_you_cant_read");
-        let error = verify_source(&restricted_path).unwrap_err();
+        let path = PathBuf::from("test_data/dir_you_cant_read");
+        let error = verify_source(&path, SourceType::Directory).unwrap_err();
         assert_eq!(ErrorKind::PermissionDenied, error.kind());
         assert_eq!(
-            "source_path: 'test_data/dir_you_cant_read' directory access denied",
+            format!(
+                "source_path: '{}' directory access denied",
+                String::from(path.to_string_lossy())
+            ),
             format!("{}", error)
         );
     }
 
     #[test]
     fn verify_source_should_fail_when_source_is_denied_file() {
-        let restricted_path = PathBuf::from("test_data/file_you_cant_read.txt");
-        let error = verify_source(&restricted_path).unwrap_err();
+        let path = PathBuf::from("test_data/file_you_cant_read.txt");
+        let error = verify_source(&path, SourceType::File).unwrap_err();
         assert_eq!(ErrorKind::PermissionDenied, error.kind());
         assert_eq!(
-            "source_path: 'test_data/file_you_cant_read.txt' file access denied",
+            format!(
+                "source_path: '{}' file access denied",
+                String::from(path.to_string_lossy())
+            ),
+            format!("{}", error)
+        );
+    }
+    #[test]
+    fn verify_source_should_fail_when_want_file_but_is_dir() {
+        let path = PathBuf::from("test_data/out");
+        let error = verify_source(&path, SourceType::File).unwrap_err();
+        assert_eq!(ErrorKind::InvalidInput, error.kind());
+        assert_eq!(
+            format!(
+                "source_path: '{}' is a directory but file was required",
+                String::from(path.to_string_lossy())
+            ),
+            format!("{}", error)
+        );
+    }
+
+    #[test]
+    fn verify_source_should_fail_when_want_dir_but_is_file() {
+        let path = PathBuf::from("test_data/not_a_dir.txt");
+        let error = verify_source(&path, SourceType::Directory).unwrap_err();
+        assert_eq!(ErrorKind::InvalidInput, error.kind());
+        assert_eq!(
+            format!(
+                "source_path: '{}' is a file but directory was required",
+                String::from(path.to_string_lossy())
+            ),
             format!("{}", error)
         );
     }

@@ -27,12 +27,15 @@ SUBCOMMANDS:
 ```
 
 Currently this will parse arguments but not actually process the any data.
+
 ```bash
 $ ./notes2md -d /tmp applenotes ./test_data/
 notes2md will read applenotes from source './test_data/' and write to '/tmp'
 Apple Notes conversion not yet implemented.
 
-$ ./notes2md -d /tmp simplenote ./test_data/not_a_dir.txt 
-notes2md will read simplenote from source './test_data/not_a_dir.txt' and write to '/tmp'
+$ ./notes2md -d test_data/out simplenote ../notes.json
+notes2md will read simplenote from source '../notes.json' and write to 'test_data/out'
 Simplenote conversion not yet implemented.
+Parsing the data works... writing it has not begun.
+Simplenote active_notes:597, trashed_notes:17.
 ```
