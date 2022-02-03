@@ -38,4 +38,12 @@ notes2md will read simplenote from source '../notes.json' and write to 'test_dat
 Simplenote conversion not yet implemented.
 Parsing the data works... writing it has not begun.
 Simplenote active_notes:597, trashed_notes:17.
+---
+title: A title
+created: "2022-01-13T22:36:18.906Z"
+modified: "2022-01-14T07:36:50.656Z"
+---
+This is a
+great piece of
+sample content!
 ```

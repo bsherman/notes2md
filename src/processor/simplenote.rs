@@ -1,3 +1,4 @@
+use super::markdown::{write_markdown, Markdown, MarkdownMeta};
 use serde::{Deserialize, Serialize};
 use std::io::ErrorKind;
 use std::str;
@@ -6,8 +7,10 @@ use std::{fs, path::PathBuf};
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct SimpleNotes {
     #[serde(rename(deserialize = "activeNotes"))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     active_notes: Option<Vec<SimpleNote>>,
     #[serde(rename(deserialize = "trashedNotes"))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     trashed_notes: Option<Vec<SimpleNote>>,
 }
 
@@ -19,10 +22,11 @@ struct SimpleNote {
     creation_date: String,
     #[serde(rename(deserialize = "lastModified"))]
     last_modified: String,
-    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     markdown: Option<bool>,
-    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pinned: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     tags: Option<Vec<String>>,
 }
 
@@ -37,7 +41,20 @@ pub fn process(source_file: PathBuf, _dest_dir: PathBuf) -> Result<(), std::io::
         all_notes.active_notes.unwrap().len(),
         all_notes.trashed_notes.unwrap().len()
     );
-    Ok(())
+
+    let note = Markdown {
+        meta: MarkdownMeta {
+            title: String::from("A title"),
+            created: String::from("2022-01-13T22:36:18.906Z"),
+            modified: String::from("2022-01-14T07:36:50.656Z"),
+            deleted: None,
+            favorited: None,
+            pinned: None,
+            tags: None,
+        },
+        content: String::from("This is a\ngreat piece of\nsample content!"),
+    };
+    write_markdown(note, _dest_dir)
 }
 
 fn load_file(source_file: &PathBuf) -> Result<String, std::io::Error> {
