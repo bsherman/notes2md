@@ -1,0 +1,16 @@
+{
+    "activeNotes": [
+        {
+            "id": "acf1756c-63a2-4ef2-9ba4-9f380478665c",
+            "content": "# Sample Document\r\n\r\n## This is a sample \r\n\r\n* list\r\n* item\r\n* \r\n",
+            "creationDate": "2022-02-04T02:05:52.302Z",
+            "lastModified": "2022-02-04T02:06:25.954Z",
+            "markdown": true,
+            "pinned": true,
+            "tags": [
+              "GoodTimes",
+              "Fun/Games"
+            ]
+        }
+    ]
+}

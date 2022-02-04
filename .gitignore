@@ -6,3 +6,4 @@ test_data/dir_you_cant_write
 test_data/dir_you_cant_read
 test_data/file_you_cant_read.txt
 test_data/tty-device
+test_data/out/

@@ -1,8 +1,16 @@
 use super::markdown::{write_markdown, Markdown, MarkdownMeta};
+use lazy_static::lazy_static; // 1.3.0
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::io::ErrorKind;
 use std::str;
 use std::{fs, path::PathBuf};
+
+
+lazy_static! {
+    static ref RE_MD_URL: Regex = Regex::new(r"\([^)]*\)").unwrap();
+    static ref RE_BOGUS_CHARS: Regex = Regex::new(r#"['"`#()!~>_\[\]\*]"#).unwrap();
+}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct SimpleNotes {
@@ -30,31 +38,36 @@ struct SimpleNote {
     tags: Option<Vec<String>>,
 }
 
-pub fn process(source_file: PathBuf, _dest_dir: PathBuf) -> Result<(), std::io::Error> {
-    println!("Simplenote conversion not yet implemented.");
-    println!("Parsing the data works... writing it has not begun.");
-    let source_text = load_file(&source_file).unwrap();
-    let all_notes = deserialize_notes(source_text).unwrap();
+pub fn process(source_file: PathBuf, dest_dir: PathBuf) -> Result<(), std::io::Error> {
+    let source_text = load_file(&source_file)?;
+    let all_notes = deserialize_notes(source_text)?;
 
-    println!(
-        "Simplenote active_notes:{}, trashed_notes:{}.",
-        all_notes.active_notes.unwrap().len(),
-        all_notes.trashed_notes.unwrap().len()
-    );
+    if all_notes.active_notes.is_some() {
+        let result = process_notes(all_notes.active_notes.unwrap(), false, &dest_dir);
+        if result.is_err() {
+            println!("{}", result.unwrap_err());
+        }
+    }
 
-    let note = Markdown {
-        meta: MarkdownMeta {
-            title: String::from("A title"),
-            created: String::from("2022-01-13T22:36:18.906Z"),
-            modified: String::from("2022-01-14T07:36:50.656Z"),
-            deleted: None,
-            favorited: None,
-            pinned: None,
-            tags: None,
-        },
-        content: String::from("This is a\ngreat piece of\nsample content!"),
-    };
-    write_markdown(note, _dest_dir)
+    if all_notes.trashed_notes.is_some() {
+        let result = process_notes(all_notes.trashed_notes.unwrap(), true, &dest_dir);
+        if result.is_err() {
+            println!("{}", result.unwrap_err());
+        }
+    }        
+
+    Ok(())
+}
+
+fn process_notes(notes: Vec<SimpleNote>, trashed: bool, dest_dir: &PathBuf) -> Result<(), std::io::Error> {
+   for note in notes {
+        let md = convert_to_markdown(note, trashed);
+        let result = write_markdown(md, dest_dir);
+        if result.is_err() {
+            println!("{}", result.unwrap_err());
+        }
+   } 
+   Ok(())
 }
 
 fn load_file(source_file: &PathBuf) -> Result<String, std::io::Error> {
@@ -80,6 +93,37 @@ fn deserialize_notes(source_text: String) -> Result<SimpleNotes, serde_json::Err
     match serde_json::from_str(&source_text) {
         Ok(notes) => Ok(notes),
         Err(e) => Err(e),
+    }
+}
+
+fn title_from_content(content: &String) -> String {
+    let first_line = String::from(match content.lines().next() {
+        Some(l) => l,
+        None => ""
+    });
+
+    // nuke any markdown style URL definitions
+    let cleaned_line = RE_MD_URL.replace_all(&first_line, "");
+  
+    // nuke some bogus characters
+    let cleaned_line = RE_BOGUS_CHARS.replace_all(&cleaned_line, "");
+
+    // trim leading/trailing whitespace
+    cleaned_line.trim().to_string()
+}
+
+fn convert_to_markdown(source: SimpleNote, trashed: bool) -> Markdown {
+    Markdown {
+        meta: MarkdownMeta{
+            title: title_from_content(&source.content),
+            created: source.creation_date,
+            modified: source.last_modified,
+            deleted: if trashed { Some(true) } else { None },
+            favorited: None,
+            pinned: source.pinned,
+            tags: source.tags
+        },
+        content: source.content.replace("\r\n", "\n")
     }
 }
 
@@ -255,5 +299,110 @@ mod tests {
         };
         let actual = deserialize_notes(String::from(source)).unwrap();
         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn title_from_content_empty() {
+        let source = String::from("");
+        let expected = String::from("");
+
+        let actual = title_from_content(&source);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn title_from_content_oneline() {
+        let source = String::from("This is a simple one liner");
+        let expected = String::from("This is a simple one liner");
+
+        let actual = title_from_content(&source);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn title_from_content_multiline() {
+        let source = String::from("Mulitple lines\r\n can comprise\r\na note, too.");
+        let expected = String::from("Mulitple lines");
+
+        let actual = title_from_content(&source);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn title_from_content_strip_markdown() {
+        let source = String::from("# ~ _ * ![`Test Code Markdown Document`](http://google.com) * _ ~ ");
+        let expected = String::from("Test Code Markdown Document");
+
+        let actual = title_from_content(&source);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn title_from_content_url_path() {
+        let source = String::from("https://www.rust-lang.org/learn/get-started");
+        let expected = String::from("https://www.rust-lang.org/learn/get-started");
+
+        let actual = title_from_content(&source);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn convert_active_simplenote_to_markdown_minimal_fields() {
+        let source = SimpleNote {
+            id: String::from("someid"),
+            content: String::from("this is a note\nand stuff"),
+            creation_date: String::from("2022-01-13T22:36:18.906Z"),
+            last_modified: String::from("2022-01-14T07:36:50.656Z"),
+            markdown: None,
+            pinned: None,
+            tags: None
+        };
+        let expected = Markdown {
+            meta: MarkdownMeta {
+                title: String::from("this is a note"),
+                created: String::from("2022-01-13T22:36:18.906Z"),
+                modified: String::from("2022-01-14T07:36:50.656Z"),
+                deleted: None,
+                favorited: None,
+                pinned: None,
+                tags: None,
+            },
+            content: String::from("this is a note\nand stuff")
+        };
+
+        let actual: Markdown = convert_to_markdown(source, false);
+        println!("{}", expected);
+        println!("{}", actual);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn simplenote_converted_and_written_to_expected_file() {
+        // this demonstrates how a fully populated Simplenote will render into a Markdown file
+        let expected: String =
+            String::from_utf8_lossy(&fs::read("test_data/expected_2-simplenote-single.md").unwrap())
+                .parse()
+                .unwrap();
+
+        let dest_dir = PathBuf::from("test_data/out");
+        let source_file = PathBuf::from("test_data/simplenote-single.json");
+        process(source_file, dest_dir).unwrap();
+
+        let actual: String =
+            String::from_utf8_lossy(&fs::read("test_data/out/Sample Document.md").unwrap())
+                .parse()
+                .unwrap();
+
+        println!("{}", expected);
+        println!("{}", actual);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn regex_tests() {
+        let re = Regex::new(r"\([^)]*\)").unwrap();
+        let before = "some [url text](http://url) other  [more url](https://more.url)";
+        let after = re.replace_all(before, "*");
+        assert_eq!(after, "some [url text]* other  [more url]*");
     }
 }
