@@ -111,8 +111,8 @@ fn title_from_content(content: &String) -> String {
     // nuke some bogus characters
     let line_no_bogos: String = RE_BOGUS_TITLE_CHARS.replace_all(&line_no_url, "").to_string();
 
-    // trim leading/trailing whitespace
-    let line_trim = line_no_bogos.trim();
+    // leading dots/spaces stripped and trimmed
+    let line_trim = line_no_bogos.trim_start_matches([' ', '.']).trim();
 
     // ensure not longer than 200 chars
     if 200 < line_trim.chars().count() {
@@ -369,6 +369,15 @@ mod tests {
     fn title_from_content_url_path() {
         let source = String::from("https://www.rust-lang.org/learn/get-started");
         let expected = String::from("https://www.rust-lang.org/learn/get-started");
+
+        let actual = title_from_content(&source);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn title_from_content_with_leading_dots() {
+        let source = String::from(". .. Some Title");
+        let expected = String::from("Some Title");
 
         let actual = title_from_content(&source);
         assert_eq!(expected, actual);

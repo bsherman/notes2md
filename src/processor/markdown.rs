@@ -52,10 +52,12 @@ fn title_to_filepath(dest_dir: &PathBuf, title: &str) -> Result<PathBuf, std::io
             format!("title: '{}' is not valid for a filename", title),
         ))
     } else {
-        let cleaned_title = RE_BOGUS_FILENAME_CHARS.replace_all(&title, "_");
-        let title_part = match cleaned_title.rsplit_once("/") {
+        let bogus_stripped = RE_BOGUS_FILENAME_CHARS.replace_all(&title, "_");
+        let leading_stripped = bogus_stripped.trim_start_matches([' ', '.']).trim();
+        let trailing_stripped = leading_stripped.trim_end_matches('/');
+        let title_part = match trailing_stripped.rsplit_once("/") {
             Some(s) => s.1.to_string(),
-            None => cleaned_title.to_string()
+            None => trailing_stripped.to_string()
         };
         let trimmed_title = title_part.trim();
         let mut file_path = dest_dir.clone();
@@ -87,7 +89,11 @@ pub fn write_markdown(markdown: Markdown, dest_dir: &PathBuf) -> Result<(), std:
     };
 
     match filepath {
-        Ok(file_path) => match fs::File::create(file_path) {
+        Ok(file_path) => {
+            if file_path.file_stem().unwrap().to_str().unwrap().to_string().starts_with("notes") {
+                println!("suspicious: {}\n{}", file_path.to_string_lossy(), markdown);
+            }
+            match fs::File::create(file_path) {
             Ok(mut f) => match serialize_markdown(&markdown) {
                 Err(e) => Err(std::io::Error::new(
                     ErrorKind::InvalidData,
@@ -99,6 +105,7 @@ pub fn write_markdown(markdown: Markdown, dest_dir: &PathBuf) -> Result<(), std:
                 },
             },
             Err(e) => Err(e),
+        }
         },
         Err(e) => {
             eprintln!("ERROR processing Note:\n{}", markdown);
@@ -283,6 +290,28 @@ sample content!
         let actual = title_to_filepath(&path, title).unwrap();
         let mut expected = PathBuf::from(path.to_str().unwrap());
         expected.push("A_ Simple_ Filename");
+        expected.set_extension("md");
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn filename_url_part_with_trailing_slash() {
+        let path = PathBuf::from("/tmp");
+        let title = "http://example.com/name-with-trailing-slash/";
+        let actual = title_to_filepath(&path, title).unwrap();
+        let mut expected = PathBuf::from(path.to_str().unwrap());
+        expected.push("name-with-trailing-slash");
+        expected.set_extension("md");
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn filename_with_leading_dots() {
+        let path = PathBuf::from("/tmp");
+        let title = ". ..Some Title";
+        let actual = title_to_filepath(&path, title).unwrap();
+        let mut expected = PathBuf::from(path.to_str().unwrap());
+        expected.push("Some Title");
         expected.set_extension("md");
         assert_eq!(actual, expected);
     }
