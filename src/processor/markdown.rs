@@ -1,9 +1,15 @@
+use lazy_static::lazy_static;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fs;
 use std::io::prelude::*;
 use std::io::ErrorKind;
 use std::path::PathBuf;
+
+lazy_static! {
+    static ref RE_BOGUS_FILENAME_CHARS: Regex = Regex::new(r#"[:?]"#).unwrap();
+}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct MarkdownMeta {
@@ -28,10 +34,6 @@ pub struct Markdown {
 
 impl fmt::Display for Markdown {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // Write strictly the first element into the supplied output
-        // stream: `f`. Returns `fmt::Result` which indicates whether the
-        // operation succeeded or failed. Note that `write!` uses syntax which
-        // is very similar to `println!`.
         write!(f, "{}", serialize_markdown(self).unwrap())
     }
 }
@@ -50,9 +52,10 @@ fn title_to_filepath(dest_dir: &PathBuf, title: &str) -> Result<PathBuf, std::io
             format!("title: '{}' is not valid for a filename", title),
         ))
     } else {
-        let title_part = match title.rsplit_once("/") {
-            Some(s) => s.1,
-            None => title
+        let cleaned_title = RE_BOGUS_FILENAME_CHARS.replace_all(&title, "_");
+        let title_part = match cleaned_title.rsplit_once("/") {
+            Some(s) => s.1.to_string(),
+            None => cleaned_title.to_string()
         };
         let trimmed_title = title_part.trim();
         let mut file_path = dest_dir.clone();
@@ -62,8 +65,28 @@ fn title_to_filepath(dest_dir: &PathBuf, title: &str) -> Result<PathBuf, std::io
     }
 }
 
+fn increment_filepath_if_exists(file_path: &PathBuf) -> PathBuf {
+    let mut corrected_path = file_path.clone();
+    let mut i: usize = 0;
+    loop {
+        if corrected_path.exists() {
+            i = i + 1;
+            let file_part = file_path.file_stem().unwrap(); // safe unwrap as we just verified the file path exists
+            corrected_path.set_file_name( format!("{} ({}).md", file_part.to_str().unwrap(), i) );
+        } else {
+            break;
+        }
+    }
+    corrected_path
+}
+
 pub fn write_markdown(markdown: Markdown, dest_dir: &PathBuf) -> Result<(), std::io::Error> {
-    match title_to_filepath(dest_dir, &markdown.meta.title) {
+    let filepath = match title_to_filepath(dest_dir, &markdown.meta.title) {
+        Ok(initial) => Ok(increment_filepath_if_exists(&initial)),
+        Err(e) => Err(e)
+    };
+
+    match filepath {
         Ok(file_path) => match fs::File::create(file_path) {
             Ok(mut f) => match serialize_markdown(&markdown) {
                 Err(e) => Err(std::io::Error::new(
@@ -77,7 +100,10 @@ pub fn write_markdown(markdown: Markdown, dest_dir: &PathBuf) -> Result<(), std:
             },
             Err(e) => Err(e),
         },
-        Err(e) => Err(e),
+        Err(e) => {
+            eprintln!("ERROR processing Note:\n{}", markdown);
+            Err(e)
+        },
     }
 }
 
@@ -250,6 +276,33 @@ sample content!
         assert_eq!(actual, expected);
     }
 
+    #[test]
+    fn filename_strips_question_and_colon() {
+        let path = PathBuf::from("/tmp");
+        let title = "A: Simple? Filename";
+        let actual = title_to_filepath(&path, title).unwrap();
+        let mut expected = PathBuf::from(path.to_str().unwrap());
+        expected.push("A_ Simple_ Filename");
+        expected.set_extension("md");
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn filepath_increments_if_already_exists_once() {
+        let path = PathBuf::from("test_data/dir_you_can_write/single-exists.md");
+        let expected = PathBuf::from("test_data/dir_you_can_write/single-exists (1).md");
+        let actual = increment_filepath_if_exists(&path);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn filepath_increments_if_already_exists_n3() {
+        // `test_data/dir_you_can_write` already contains `sample-exists.md` plus 2 versions with numbers `(1)` and `(2)` so this should give us `(3)`
+        let path = PathBuf::from("test_data/dir_you_can_write/sample-exists.md");
+        let expected = PathBuf::from("test_data/dir_you_can_write/sample-exists (3).md");
+        let actual = increment_filepath_if_exists(&path);
+        assert_eq!(actual, expected);
+    }
 
     #[test]
     fn markdown_writes_correct_content_to_expected_file() {

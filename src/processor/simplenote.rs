@@ -1,5 +1,5 @@
 use super::markdown::{write_markdown, Markdown, MarkdownMeta};
-use lazy_static::lazy_static; // 1.3.0
+use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::io::ErrorKind;
@@ -9,7 +9,7 @@ use std::{fs, path::PathBuf};
 
 lazy_static! {
     static ref RE_MD_URL: Regex = Regex::new(r"\([^)]*\)").unwrap();
-    static ref RE_BOGUS_CHARS: Regex = Regex::new(r#"['"`#()!~>_\[\]\*]"#).unwrap();
+    static ref RE_BOGUS_TITLE_CHARS: Regex = Regex::new(r#"['"`#()!~>_\[\]\*]"#).unwrap();
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -97,19 +97,29 @@ fn deserialize_notes(source_text: String) -> Result<SimpleNotes, serde_json::Err
 }
 
 fn title_from_content(content: &String) -> String {
-    let first_line = String::from(match content.lines().next() {
-        Some(l) => l,
-        None => ""
-    });
+    let mut first_line = "";
+    for line in content.lines() {
+        if "" != line.trim() {
+            first_line = line;
+            break;
+        }
+    }
 
     // nuke any markdown style URL definitions
-    let cleaned_line = RE_MD_URL.replace_all(&first_line, "");
+    let line_no_url: String = RE_MD_URL.replace_all(&first_line, "").to_string();
   
     // nuke some bogus characters
-    let cleaned_line = RE_BOGUS_CHARS.replace_all(&cleaned_line, "");
+    let line_no_bogos: String = RE_BOGUS_TITLE_CHARS.replace_all(&line_no_url, "").to_string();
 
     // trim leading/trailing whitespace
-    cleaned_line.trim().to_string()
+    let line_trim = line_no_bogos.trim();
+
+    // ensure not longer than 200 chars
+    if 200 < line_trim.chars().count() {
+        line_trim[0..200].to_string()
+    } else {
+        line_trim.to_string()
+    }
 }
 
 fn convert_to_markdown(source: SimpleNote, trashed: bool) -> Markdown {
@@ -329,6 +339,24 @@ mod tests {
     }
 
     #[test]
+    fn title_from_content_multiline_with_blanks() {
+        let source = String::from("\r\n\r\n   \r\n\r\nMulitple lines\r\n can be present with spaces in front for\r\nthe note, too.");
+        let expected = String::from("Mulitple lines");
+
+        let actual = title_from_content(&source);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn title_from_content_max_length_200() {
+        let source = String::from("CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCXXXXXXXXXX");
+        let expected = String::from("CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC");
+
+        let actual = title_from_content(&source);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
     fn title_from_content_strip_markdown() {
         let source = String::from("# ~ _ * ![`Test Code Markdown Document`](http://google.com) * _ ~ ");
         let expected = String::from("Test Code Markdown Document");
@@ -396,13 +424,5 @@ mod tests {
         println!("{}", expected);
         println!("{}", actual);
         assert_eq!(expected, actual);
-    }
-
-    #[test]
-    fn regex_tests() {
-        let re = Regex::new(r"\([^)]*\)").unwrap();
-        let before = "some [url text](http://url) other  [more url](https://more.url)";
-        let after = re.replace_all(before, "*");
-        assert_eq!(after, "some [url text]* other  [more url]*");
     }
 }
