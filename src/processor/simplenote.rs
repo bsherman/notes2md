@@ -41,7 +41,7 @@ pub fn process(source_file: PathBuf, dest_dir: PathBuf) -> Result<(), std::io::E
         println!("{}", active_result.unwrap_err());
     }
 
-    let trashed_result = process_notes(all_notes.trashed_notes, false, &dest_dir);
+    let trashed_result = process_notes(all_notes.trashed_notes, true, &dest_dir);
     if trashed_result.is_err() {
         println!("{}", trashed_result.unwrap_err());
     }
@@ -447,5 +447,29 @@ mod tests {
         println!("{}", expected);
         println!("{}", actual);
         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn full_process() {
+        let expected_active = r#"---
+title: process-active
+created: "2022-01-13T22:36:18.906Z"
+modified: "2022-01-14T07:36:50.656Z"
+---
+process-active
+"#;
+        let expected_trashed = r#"---
+title: process-trashed
+created: "2022-01-10T12:16:17.906Z"
+modified: "2022-01-11T03:34:55.656Z"
+deleted: true
+---
+process-trashed
+"#;
+        let _r = process(PathBuf::from("test_data/process-active-trashed.json"), PathBuf::from("test_data/out"));
+        let actual_active = fs::read_to_string("test_data/out/process-active.md").unwrap();
+        let actual_trashed = fs::read_to_string("test_data/out/process-trashed.md").unwrap();
+        assert_eq!(expected_active, actual_active);
+        assert_eq!(expected_trashed, actual_trashed);
     }
 }
