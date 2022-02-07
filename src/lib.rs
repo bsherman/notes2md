@@ -46,7 +46,7 @@ fn verify_dest(dest_dir: &PathBuf) -> Result<(), Error> {
         Err(e) => match e.kind() {
             ErrorKind::NotFound => Err(Error::new(
                 e.kind(),
-                format!("dest_dir: '{}' not found", dest_dir.to_str().unwrap()),
+                format!("dest_dir: '{}' not found", dest_dir.to_string_lossy()),
             )),
             _ => Err(e),
         },
@@ -55,7 +55,7 @@ fn verify_dest(dest_dir: &PathBuf) -> Result<(), Error> {
                 Err(e) => match e.kind() {
                     ErrorKind::PermissionDenied => Err(Error::new(
                         e.kind(),
-                        format!("dest_dir: '{}' not writable", dest_dir.to_str().unwrap()),
+                        format!("dest_dir: '{}' not writable", dest_dir.to_string_lossy()),
                     )),
                     _ => Err(e),
                 },
@@ -65,7 +65,7 @@ fn verify_dest(dest_dir: &PathBuf) -> Result<(), Error> {
                 ErrorKind::InvalidInput,
                 format!(
                     "dest_dir: '{}' must be a directory",
-                    dest_dir.to_str().unwrap()
+                    dest_dir.to_string_lossy()
                 ),
             )),
         },
@@ -78,7 +78,7 @@ fn verify_source(source_path: &PathBuf, source_type: SourceType) -> Result<(), E
         Err(e) => match e.kind() {
             ErrorKind::NotFound => Err(Error::new(
                 e.kind(),
-                format!("source_path: '{}' not found", source_path.to_str().unwrap()),
+                format!("source_path: '{}' not found", source_path.to_string_lossy()),
             )),
             _ => Err(e),
         },
@@ -92,7 +92,7 @@ fn verify_source(source_path: &PathBuf, source_type: SourceType) -> Result<(), E
                                 e.kind(),
                                 format!(
                                     "source_path: '{}' directory access denied",
-                                    source_path.to_str().unwrap()
+                                    source_path.to_string_lossy()
                                 ),
                             )),
                             _ => Err(e),
@@ -104,7 +104,7 @@ fn verify_source(source_path: &PathBuf, source_type: SourceType) -> Result<(), E
                         ErrorKind::InvalidInput,
                         format!(
                             "source_path: '{}' is a directory but file was required",
-                            source_path.to_str().unwrap()
+                            source_path.to_string_lossy()
                         ),
                     ))
                 }
@@ -118,7 +118,7 @@ fn verify_source(source_path: &PathBuf, source_type: SourceType) -> Result<(), E
                                 e.kind(),
                                 format!(
                                     "source_path: '{}' file access denied",
-                                    source_path.to_str().unwrap()
+                                    source_path.to_string_lossy()
                                 ),
                             )),
                             _ => Err(e),
@@ -130,7 +130,7 @@ fn verify_source(source_path: &PathBuf, source_type: SourceType) -> Result<(), E
                         ErrorKind::InvalidInput,
                         format!(
                             "source_path: '{}' is a file but directory was required",
-                            source_path.to_str().unwrap()
+                            source_path.to_string_lossy()
                         ),
                     ))
                 }
@@ -140,7 +140,7 @@ fn verify_source(source_path: &PathBuf, source_type: SourceType) -> Result<(), E
                     ErrorKind::InvalidInput,
                     format!(
                         "source_path: '{}' is not a file or directory",
-                        source_path.to_str().unwrap()
+                        source_path.to_string_lossy()
                     ),
                 ))
             }

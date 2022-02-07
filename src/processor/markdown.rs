@@ -1,15 +1,12 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::ffi::OsStr;
 use std::fmt;
 use std::fs;
 use std::io::prelude::*;
 use std::io::ErrorKind;
 use std::path::PathBuf;
-
-lazy_static! {
-    static ref RE_BOGUS_FILENAME_CHARS: Regex = Regex::new(r#"[:?]"#).unwrap();
-}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct MarkdownMeta {
@@ -34,7 +31,10 @@ pub struct Markdown {
 
 impl fmt::Display for Markdown {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", serialize_markdown(self).unwrap())
+        match serialize_markdown(self) {
+            Ok(s) => write!(f, "{}", s),
+            Err(e) => write!(f, "{}", format!("{}", e)),
+        }
     }
 }
 
@@ -46,6 +46,10 @@ fn serialize_markdown(markdown: &Markdown) -> Result<String, serde_yaml::Error> 
 }
 
 fn title_to_filepath(dest_dir: &PathBuf, title: &str) -> Result<PathBuf, std::io::Error> {
+    lazy_static! {
+        static ref RE_BOGUS_FILENAME_CHARS: Regex = Regex::new(r#"[:?]"#).unwrap();
+    }
+
     if "".eq(title) {
         Err(std::io::Error::new(
             ErrorKind::InvalidData,
@@ -57,7 +61,7 @@ fn title_to_filepath(dest_dir: &PathBuf, title: &str) -> Result<PathBuf, std::io
         let trailing_stripped = leading_stripped.trim_end_matches('/');
         let title_part = match trailing_stripped.rsplit_once("/") {
             Some(s) => s.1.to_string(),
-            None => trailing_stripped.to_string()
+            None => trailing_stripped.to_string(),
         };
         let trimmed_title = title_part.trim();
         let mut file_path = dest_dir.clone();
@@ -73,8 +77,11 @@ fn increment_filepath_if_exists(file_path: &PathBuf) -> PathBuf {
     loop {
         if corrected_path.exists() {
             i = i + 1;
-            let file_part = file_path.file_stem().unwrap(); // safe unwrap as we just verified the file path exists
-            corrected_path.set_file_name( format!("{} ({}).md", file_part.to_str().unwrap(), i) );
+            let file_part = match file_path.file_stem() {
+                Some(s) => s,
+                None => OsStr::new(""),
+            };
+            corrected_path.set_file_name(format!("{} ({}).md", file_part.to_string_lossy(), i));
         } else {
             break;
         }
@@ -85,15 +92,11 @@ fn increment_filepath_if_exists(file_path: &PathBuf) -> PathBuf {
 pub fn write_markdown(markdown: Markdown, dest_dir: &PathBuf) -> Result<(), std::io::Error> {
     let filepath = match title_to_filepath(dest_dir, &markdown.meta.title) {
         Ok(initial) => Ok(increment_filepath_if_exists(&initial)),
-        Err(e) => Err(e)
+        Err(e) => Err(e),
     };
 
     match filepath {
-        Ok(file_path) => {
-            if file_path.file_stem().unwrap().to_str().unwrap().to_string().starts_with("notes") {
-                println!("suspicious: {}\n{}", file_path.to_string_lossy(), markdown);
-            }
-            match fs::File::create(file_path) {
+        Ok(file_path) => match fs::File::create(file_path) {
             Ok(mut f) => match serialize_markdown(&markdown) {
                 Err(e) => Err(std::io::Error::new(
                     ErrorKind::InvalidData,
@@ -105,12 +108,11 @@ pub fn write_markdown(markdown: Markdown, dest_dir: &PathBuf) -> Result<(), std:
                 },
             },
             Err(e) => Err(e),
-        }
         },
         Err(e) => {
             eprintln!("ERROR processing Note:\n{}", markdown);
             Err(e)
-        },
+        }
     }
 }
 
@@ -363,7 +365,7 @@ sample content!
             String::from_utf8_lossy(&fs::read("test_data/out/A title.md").unwrap())
                 .parse()
                 .unwrap();
-                
+
         println!("{}", expected);
         println!("{}", actual);
         assert_eq!(expected, actual);

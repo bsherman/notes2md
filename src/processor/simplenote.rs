@@ -6,12 +6,6 @@ use std::io::ErrorKind;
 use std::str;
 use std::{fs, path::PathBuf};
 
-
-lazy_static! {
-    static ref RE_MD_URL: Regex = Regex::new(r"\([^)]*\)").unwrap();
-    static ref RE_BOGUS_TITLE_CHARS: Regex = Regex::new(r#"['"`#()!~>_\[\]\*]"#).unwrap();
-}
-
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct SimpleNotes {
     #[serde(rename(deserialize = "activeNotes"))]
@@ -42,32 +36,43 @@ pub fn process(source_file: PathBuf, dest_dir: PathBuf) -> Result<(), std::io::E
     let source_text = load_file(&source_file)?;
     let all_notes = deserialize_notes(source_text)?;
 
-    if all_notes.active_notes.is_some() {
-        let result = process_notes(all_notes.active_notes.unwrap(), false, &dest_dir);
-        if result.is_err() {
-            println!("{}", result.unwrap_err());
-        }
+    let active_result = process_notes(all_notes.active_notes, false, &dest_dir);
+    if active_result.is_err() {
+        println!("{}", active_result.unwrap_err());
     }
 
-    if all_notes.trashed_notes.is_some() {
-        let result = process_notes(all_notes.trashed_notes.unwrap(), true, &dest_dir);
-        if result.is_err() {
-            println!("{}", result.unwrap_err());
-        }
-    }        
+    let trashed_result = process_notes(all_notes.trashed_notes, false, &dest_dir);
+    if trashed_result.is_err() {
+        println!("{}", trashed_result.unwrap_err());
+    }
 
     Ok(())
 }
 
-fn process_notes(notes: Vec<SimpleNote>, trashed: bool, dest_dir: &PathBuf) -> Result<(), std::io::Error> {
-   for note in notes {
-        let md = convert_to_markdown(note, trashed);
-        let result = write_markdown(md, dest_dir);
-        if result.is_err() {
-            println!("{}", result.unwrap_err());
+fn process_notes(
+    notes: Option<Vec<SimpleNote>>,
+    trashed: bool,
+    dest_dir: &PathBuf,
+) -> Result<(), std::io::Error> {
+    match notes {
+        Some(n) => {
+            for note in n {
+                let md = convert_to_markdown(note, trashed);
+                let result = write_markdown(md, dest_dir);
+                if result.is_err() {
+                    println!("{}", result.unwrap_err());
+                }
+            }
         }
-   } 
-   Ok(())
+        None => {
+            let note_type = match trashed {
+                true => "trashed",
+                false => "active",
+            };
+            println!("No {} notes found to process.", note_type);
+        }
+    };
+    Ok(())
 }
 
 fn load_file(source_file: &PathBuf) -> Result<String, std::io::Error> {
@@ -82,7 +87,7 @@ fn load_file(source_file: &PathBuf) -> Result<String, std::io::Error> {
                 ErrorKind::InvalidData,
                 format!(
                     "source_file: '{}' contains data which is not UTF8",
-                    source_file.to_str().unwrap()
+                    source_file.to_string_lossy()
                 ),
             ))
         }
@@ -97,6 +102,11 @@ fn deserialize_notes(source_text: String) -> Result<SimpleNotes, serde_json::Err
 }
 
 fn title_from_content(content: &String) -> String {
+    lazy_static! {
+        static ref RE_MD_URL: Regex = Regex::new(r"\([^)]*\)").unwrap();
+        static ref RE_BOGUS_TITLE_CHARS: Regex = Regex::new(r#"['"`#()!~>_\[\]\*]"#).unwrap();
+    }
+
     let mut first_line = "";
     for line in content.lines() {
         if "" != line.trim() {
@@ -107,9 +117,11 @@ fn title_from_content(content: &String) -> String {
 
     // nuke any markdown style URL definitions
     let line_no_url: String = RE_MD_URL.replace_all(&first_line, "").to_string();
-  
+
     // nuke some bogus characters
-    let line_no_bogos: String = RE_BOGUS_TITLE_CHARS.replace_all(&line_no_url, "").to_string();
+    let line_no_bogos: String = RE_BOGUS_TITLE_CHARS
+        .replace_all(&line_no_url, "")
+        .to_string();
 
     // leading dots/spaces stripped and trimmed
     let line_trim = line_no_bogos.trim_start_matches([' ', '.']).trim();
@@ -124,16 +136,16 @@ fn title_from_content(content: &String) -> String {
 
 fn convert_to_markdown(source: SimpleNote, trashed: bool) -> Markdown {
     Markdown {
-        meta: MarkdownMeta{
+        meta: MarkdownMeta {
             title: title_from_content(&source.content),
             created: source.creation_date,
             modified: source.last_modified,
             deleted: if trashed { Some(true) } else { None },
             favorited: None,
             pinned: source.pinned,
-            tags: source.tags
+            tags: source.tags,
         },
-        content: source.content.replace("\r\n", "\n")
+        content: source.content.replace("\r\n", "\n"),
     }
 }
 
@@ -358,7 +370,8 @@ mod tests {
 
     #[test]
     fn title_from_content_strip_markdown() {
-        let source = String::from("# ~ _ * ![`Test Code Markdown Document`](http://google.com) * _ ~ ");
+        let source =
+            String::from("# ~ _ * ![`Test Code Markdown Document`](http://google.com) * _ ~ ");
         let expected = String::from("Test Code Markdown Document");
 
         let actual = title_from_content(&source);
@@ -392,7 +405,7 @@ mod tests {
             last_modified: String::from("2022-01-14T07:36:50.656Z"),
             markdown: None,
             pinned: None,
-            tags: None
+            tags: None,
         };
         let expected = Markdown {
             meta: MarkdownMeta {
@@ -404,7 +417,7 @@ mod tests {
                 pinned: None,
                 tags: None,
             },
-            content: String::from("this is a note\nand stuff")
+            content: String::from("this is a note\nand stuff"),
         };
 
         let actual: Markdown = convert_to_markdown(source, false);
@@ -416,10 +429,11 @@ mod tests {
     #[test]
     fn simplenote_converted_and_written_to_expected_file() {
         // this demonstrates how a fully populated Simplenote will render into a Markdown file
-        let expected: String =
-            String::from_utf8_lossy(&fs::read("test_data/expected_2-simplenote-single.md").unwrap())
-                .parse()
-                .unwrap();
+        let expected: String = String::from_utf8_lossy(
+            &fs::read("test_data/expected_2-simplenote-single.md").unwrap(),
+        )
+        .parse()
+        .unwrap();
 
         let dest_dir = PathBuf::from("test_data/out");
         let source_file = PathBuf::from("test_data/simplenote-single.json");
