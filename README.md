@@ -26,24 +26,28 @@ SUBCOMMANDS:
     simplenote    process a JSON file export of Simplenote data <SOURCE_FILE>
 ```
 
-Currently this will parse arguments but not actually process the any data.
+Currently this functions quite well for Simplenote conversions.
+A note will be ignored if it has no content, more spcecifically, if the title parsing results in an empty string. If this occurs, the resulting converted markdown is output with an error message.
+
+
+```bash
+$ ./notes2md -d test_data/out simplenote ../notes.json
+notes2md will read simplenote from source '../notes.json' and write to 'test_data/out'
+ERROR processing Note:
+---
+title: ""
+created: "2021-02-15T17:04:31.319Z"
+modified: "2021-02-15T17:05:25.325Z"
+---
+
+
+title: '' is not valid for a filename
+```
+
+Apple Notes is not yet implemented.
 
 ```bash
 $ ./notes2md -d /tmp applenotes ./test_data/
 notes2md will read applenotes from source './test_data/' and write to '/tmp'
 Apple Notes conversion not yet implemented.
-
-$ ./notes2md -d test_data/out simplenote ../notes.json
-notes2md will read simplenote from source '../notes.json' and write to 'test_data/out'
-Simplenote conversion not yet implemented.
-Parsing the data works... writing it has not begun.
-Simplenote active_notes:597, trashed_notes:17.
----
-title: A title
-created: "2022-01-13T22:36:18.906Z"
-modified: "2022-01-14T07:36:50.656Z"
----
-This is a
-great piece of
-sample content!
 ```
